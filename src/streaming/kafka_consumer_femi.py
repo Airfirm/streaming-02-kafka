@@ -7,8 +7,17 @@ Reads sales messages from a Kafka topic.
 Start with main() at the bottom.
 Work up to see how it all fits together.
 
-Many functions are standard helpers
-and should not need project-specific modifications.
+Technical Modification:
+This custom version applies streaming analytics to a new business problem:
+identifying high-value online sales orders in real time.
+
+The consumer now:
+- Consumes sales messages from a Kafka topic.
+- Calculates sale_total using quantity * unit_price.
+- Adds order_priority:
+    - high_value if sale_total is greater than or equal to 100
+    - standard if sale_total is less than 100
+- Writes processed records to consumed_sales_femi.csv.
 
 Author: Oluwafemi Salawu
 Date: 2026-05
@@ -16,7 +25,6 @@ Date: 2026-05
 Terminal command to run this file from the root project folder:
 
     uv run python -m streaming.kafka_consumer_femi
-
 """
 
 # === DECLARE IMPORTS ===
@@ -59,13 +67,17 @@ COURSE_NAME: Final[str] = "Streaming Data"
 TIMEOUT_SECONDS: Final[float] = float(os.getenv("CONSUMER_TIMEOUT_SECONDS", "10.0"))
 MAX_MESSAGES: Final[int] = int(os.getenv("CONSUMER_MAX_MESSAGES", "1000"))
 
+# Business rule for high-value orders
+HIGH_VALUE_THRESHOLD: Final[float] = 100.00
+
 # === DECLARE CONSTANT PATHS ===
 
 ROOT_DIR: Final[Path] = Path.cwd()
 DATA_DIR: Final[Path] = ROOT_DIR / "data"
 OUTPUT_DIR: Final[Path] = DATA_DIR / "output"
 
-OUTPUT_CSV: Final[Path] = OUTPUT_DIR / "consumed_sales.csv"
+# Custom output file for Femi's processed Kafka consumer results
+OUTPUT_CSV: Final[Path] = OUTPUT_DIR / "consumed_sales_femi.csv"
 
 
 # ==========================================================
@@ -97,6 +109,7 @@ def load_settings() -> KafkaSettings:
     LOG.info(f"KAFKA_GROUP_ID           = {settings.group_id}")
     LOG.info(f"CONSUMER_TIMEOUT_SECONDS = {TIMEOUT_SECONDS}")
     LOG.info(f"CONSUMER_MAX_MESSAGES    = {MAX_MESSAGES}")
+    LOG.info(f"HIGH_VALUE_THRESHOLD     = {HIGH_VALUE_THRESHOLD}")
     return settings
 
 
@@ -107,6 +120,7 @@ def verify_connection(settings: KafkaSettings) -> None:
         SystemExit: If Kafka is not reachable.
     """
     LOG.info("Verifying Kafka connection...")
+
     try:
         verify_kafka_connection(settings)
         LOG.info("Kafka port is reachable.")
@@ -126,7 +140,8 @@ def verify_topic(settings: KafkaSettings) -> None:
 
     if not topic_exists(admin, settings.topic):
         LOG.error(f"Topic {settings.topic!r} does not exist.")
-        LOG.error("Run the producer first.")
+        LOG.error("Run the Kafka admin file first to create the topic.")
+        LOG.error("Then run the producer before running the consumer.")
         raise SystemExit(1)
 
     message_count = get_topic_message_count(admin, settings.topic, settings)
@@ -147,6 +162,7 @@ def get_kafka_consumer(settings: KafkaSettings) -> Any:
         A confluent_kafka.Consumer instance subscribed to the topic.
     """
     LOG.info("Creating Kafka consumer...")
+
     consumer = create_consumer(settings)
     consumer.subscribe(
         [settings.topic],
@@ -161,6 +177,7 @@ def get_kafka_consumer(settings: KafkaSettings) -> Any:
             ]
         ),
     )
+
     LOG.info(f"Subscribed to topic: {settings.topic!r} (reading from beginning)")
     return consumer
 
@@ -171,7 +188,7 @@ def get_kafka_consumer(settings: KafkaSettings) -> Any:
 
 
 def initialize_output() -> RunningStats:
-    """Initialize output directory, CSV, database, chart, and stats.
+    """Initialize output directory, CSV file, and running stats.
 
     Returns:
         A RunningStats instance.
@@ -181,25 +198,75 @@ def initialize_output() -> RunningStats:
 
     if OUTPUT_CSV.exists():
         OUTPUT_CSV.unlink()
+
     LOG.info(f"Output CSV cleared: {OUTPUT_CSV.name}")
 
     return RunningStats()
 
 
-def process_message(row: dict[str, Any]) -> dict[str, Any]:
-    """Process one consumed message.
+def calculate_sale_total(row: dict[str, Any]) -> float:
+    """Calculate the total sale amount for one order.
 
-    Module 02 does not validate, enrich, chart, or store messages yet.
-    It simply returns the raw Kafka message.
+    Arguments:
+        row: A consumed Kafka sales message.
+
+    Returns:
+        The calculated sale total rounded to two decimals.
+    """
+    try:
+        quantity = int(row.get("quantity", 0))
+        unit_price = float(row.get("unit_price", 0.0))
+        sale_total = quantity * unit_price
+    except TypeError, ValueError:
+        LOG.warning("Could not calculate sale_total. Defaulting to 0.00.")
+        sale_total = 0.0
+
+    return round(sale_total, 2)
+
+
+def classify_order_priority(sale_total: float) -> str:
+    """Classify an order as high_value or standard.
+
+    Arguments:
+        sale_total: The calculated total sale amount.
+
+    Returns:
+        The order priority classification.
+    """
+    if sale_total >= HIGH_VALUE_THRESHOLD:
+        return "high_value"
+
+    return "standard"
+
+
+def process_message(row: dict[str, Any]) -> dict[str, Any]:
+    """Process one consumed Kafka message by adding analyst-friendly fields.
+
+    This modification applies streaming analytics to a new business problem:
+    identifying high-value online sales orders in real time.
 
     Arguments:
         row: A raw consumed Kafka message row.
 
     Returns:
-        The same row.
+        The processed row with sale_total and order_priority added.
     """
     LOG.info("Processing raw message.")
-    return row
+
+    processed_row = dict(row)
+
+    sale_total = calculate_sale_total(processed_row)
+    order_priority = classify_order_priority(sale_total)
+
+    processed_row["sale_total"] = sale_total
+    processed_row["order_priority"] = order_priority
+
+    if order_priority == "high_value":
+        LOG.info(f"HIGH VALUE ORDER DETECTED: ${sale_total:.2f}")
+    else:
+        LOG.info(f"Standard order processed: ${sale_total:.2f}")
+
+    return processed_row
 
 
 def consume_messages(consumer: Any) -> int:
@@ -249,7 +316,11 @@ def consume_messages(consumer: Any) -> int:
 
 
 def save_artifacts(stats: RunningStats) -> None:
-    """Save output artifacts."""
+    """Save output artifacts.
+
+    Arguments:
+        stats: A RunningStats instance for future analytics extensions.
+    """
     LOG.info("Saving artifacts...")
     log_path(LOG, "WROTE OUTPUT_CSV", OUTPUT_CSV)
 
@@ -260,7 +331,12 @@ def save_artifacts(stats: RunningStats) -> None:
 
 
 def log_summary(consumed_count: int, settings: KafkaSettings) -> None:
-    """Log final summary statistics."""
+    """Log final summary statistics.
+
+    Arguments:
+        consumed_count: The number of messages consumed.
+        settings: The KafkaSettings object containing configuration details.
+    """
     LOG.info("Summary:")
     LOG.info(f"Consumed {consumed_count} message(s) from topic {settings.topic!r}.")
     log_path(LOG, "OUTPUT_CSV", OUTPUT_CSV)
@@ -291,7 +367,7 @@ def main() -> None:
     LOG.info("SECTION C. Consume and Process Messages")
     LOG.info("========================")
 
-    initialize_output()
+    stats = initialize_output()
 
     consumed_count = 0
 
@@ -305,6 +381,7 @@ def main() -> None:
     LOG.info("SECTION E. Exit")
     LOG.info("========================")
 
+    save_artifacts(stats)
     log_summary(consumed_count, settings)
 
 
