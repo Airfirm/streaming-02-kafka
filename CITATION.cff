@@ -20,9 +20,13 @@ authors:
     given-names: Denise M.
     orcid: "https://orcid.org/0000-0001-6165-7389"
     affiliation: "Northwest Missouri State University, School of Computer Science and Information Systems, Maryville, MO, USA"
+  - family-names: Salawu
+    given-names: Oluwafemi
+    orcid: "https://orcid.org/0000-0001-6165-7389"
+    affiliation: "Northwest Missouri State University, School of Computer Science and Information Systems, Maryville, MO, USA"
 
-repository-code: "https://github.com/denisecase/streaming-02-kafka"
-url: "https://github.com/denisecase/streaming-02-kafka"
+repository-code: "https://github.com/Airfirm/streaming-02-kafka"
+url: "https://github.com/Airfirm/streaming-02-kafka"
 license: MIT
 
 abstract: >
