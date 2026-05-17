@@ -217,7 +217,10 @@ def calculate_sale_total(row: dict[str, Any]) -> float:
         quantity = int(row.get("quantity", 0))
         unit_price = float(row.get("unit_price", 0.0))
         sale_total = quantity * unit_price
-    except TypeError, ValueError:
+    except TypeError:
+        LOG.warning("Could not calculate sale_total. Defaulting to 0.00.")
+        sale_total = 0.0
+    except ValueError:
         LOG.warning("Could not calculate sale_total. Defaulting to 0.00.")
         sale_total = 0.0
 

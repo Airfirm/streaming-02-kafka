@@ -1,4 +1,272 @@
-# streaming-02-kafka
+# Streaming 02 Kafka
+
+## Project Overview
+
+This project demonstrates the foundations of streaming analytics using Apache Kafka, Python, producers,
+consumers, and Kafka topics.
+
+The main goal of this project is to show how data can move through a real-time streaming workflow.
+In this module, the producer reads online sales records from a CSV file and publishes each record as
+a Kafka message. The consumer subscribes to the Kafka topic, receives the messages, processes them,
+and writes the results to an output CSV file.
+
+This project builds on the first streaming foundations project by moving from a local simulated topic
+file to an actual Kafka topic.
+
+## Custom Project Files
+
+For my custom project, I created and worked with the following files:
+
+```text
+src/streaming/kafka_admin_femi.py
+src/streaming/kafka_producer_femi.py
+src/streaming/kafka_consumer_femi.py
+
+
+Dataset
+
+The dataset used in this project is:
+
+data/sales.csv
+
+This dataset contains simulated online sales transaction records. Each row represents one customer order.
+
+The dataset includes fields such as:
+
+order_id
+datetime
+region_id
+currency_code
+product_id
+unit_price
+quantity
+is_online
+customer_id
+is_new_customer
+device_type
+payment_method
+referral_source
+discount_code
+customer_note
+
+I used the original sales dataset. I did not modify the source CSV file itself. Instead, I modified the Kafka consumer so that it adds new analysis fields after messages are consumed.
+
+Kafka Topic
+
+The Kafka topic used for my custom project is:
+
+streaming-02-kafka-femi
+
+The Kafka admin file is used to verify that Kafka is reachable and that the topic exists before running the producer and consumer.
+
+The admin file can be run with:
+
+uv run python -m streaming.kafka_admin_femi
+
+This step is important because the producer and consumer need the Kafka topic to exist before messages can be sent and read successfully.
+
+Kafka Producer
+
+The custom Kafka producer file is:
+
+src/streaming/kafka_producer_femi.py
+
+The producer reads records from:
+
+data/sales.csv
+
+Then it sends each sales record as a message to the Kafka topic:
+
+streaming-02-kafka-femi
+
+The producer sends one message at a time, with a short delay between messages. This simulates streaming data because the records move through the system gradually instead of being processed all at once.
+
+The Kafka message key used by the producer is:
+
+region_id
+
+Examples of message keys include:
+
+US-TX
+CA-QC
+US-CA
+US-MO
+CA-ON
+
+Using region_id as the message key is helpful because it connects each sales message to a geographic sales region.
+
+The producer can be run with:
+
+uv run python -m streaming.kafka_producer_femi
+Kafka Consumer
+
+The custom Kafka consumer file is:
+
+src/streaming/kafka_consumer_femi.py
+
+The consumer subscribes to the Kafka topic and receives the sales messages produced by the producer.
+
+The consumer receives the original sales record fields plus Kafka metadata fields such as:
+
+_kafka_key
+_kafka_partition
+_kafka_offset
+
+These Kafka metadata fields help show how Kafka handled each message. The _kafka_key shows the message key, the _kafka_partition shows which partition stored the message, and the _kafka_offset shows the message position in the topic.
+
+The consumer writes processed records to:
+
+data/output/consumed_sales_femi.csv
+
+The consumer can be run with:
+
+uv run python -m streaming.kafka_consumer_femi
+Technical Modification
+
+For my technical modification, I updated the Kafka consumer so it does more than simply consume and save raw messages.
+
+I modified the consumer to calculate a new field:
+
+sale_total
+
+The sale_total field is calculated using:
+
+quantity * unit_price
+
+I also added another field:
+
+order_priority
+
+The order_priority field classifies each order as either:
+
+high_value
+standard
+
+Orders with a sale_total greater than or equal to 100 are classified as:
+
+high_value
+
+Orders below 100 are classified as:
+
+standard
+
+This modification turns the consumer into a basic real-time analytics processor. Instead of only receiving messages, it adds business meaning to each sales transaction.
+
+Apply the Skills to a New Problem
+
+I applied the Kafka streaming workflow to a business problem: identifying high-value online sales orders in real time.
+
+In a real business setting, a company may want to know when larger purchases happen instead of waiting for an end-of-day report. My modified consumer helps solve this problem by processing each sales message as it arrives and flagging higher-value orders immediately.
+
+This type of streaming analytics could support:
+
+real-time sales monitoring
+customer behavior analysis
+regional sales tracking
+product demand analysis
+high-value order detection
+business reporting
+How to Run the Project
+
+Before running the Python files, make sure Kafka is running in WSL.
+
+In the WSL Kafka terminal, start Kafka:
+
+cd ~/kafka
+bin/kafka-server-start.sh config/server.properties
+
+Leave that terminal open while running the project.
+
+Then run the project files in this order from the root project folder:
+
+1. Run the Kafka admin file
+uv run python -m streaming.kafka_admin_femi
+
+This verifies the Kafka connection and ensures the topic exists.
+
+2. Run the Kafka producer
+uv run python -m streaming.kafka_producer_femi
+
+This sends sales messages to the Kafka topic.
+
+3. Run the Kafka consumer
+uv run python -m streaming.kafka_consumer_femi
+
+This consumes the messages, processes them, and writes the results to a CSV file.
+
+Expected Output
+
+The expected consumer output file is:
+
+data/output/consumed_sales_femi.csv
+
+This file should include the original sales fields, Kafka metadata fields, and the custom analysis fields:
+
+sale_total
+order_priority
+Results
+
+When I ran the admin file, Kafka was reachable and the topic was verified or created.
+
+When I ran the producer, it read records from the sales dataset and sent six sales messages to the Kafka topic. Each message represented one online sales transaction.
+
+When I ran the consumer, it consumed the Kafka messages, processed each record, calculated the sale total, classified the order priority, and saved the results to consumed_sales_femi.csv.
+
+This confirmed that the Kafka workflow worked successfully from producer to topic to consumer.
+
+Interpretation
+
+This project helped me understand how Kafka supports streaming analytics. The producer and consumer do not directly call each other. Instead, the producer publishes messages to a Kafka topic, and the consumer subscribes to that topic to read and process the messages.
+
+This showed me how Kafka helps decouple systems. Each part of the pipeline has its own role:
+
+Admin: manages and verifies the topic
+Producer: sends messages to Kafka
+Topic: stores and organizes messages
+Consumer: reads and processes messages
+
+The biggest change from the original example was that my consumer added business-focused analysis fields. Instead of only saving raw messages, it calculated sale_total and classified orders as high_value or standard.
+
+Business Intelligence Gained
+
+The consumed messages can provide useful business insights, such as:
+
+which products are being purchased
+which regions are producing sales
+which orders are high-value
+which referral sources are bringing customers in
+which device types customers are using
+how much revenue each order represents
+
+This kind of streaming workflow could help a business monitor activity as it happens and make faster decisions.
+
+Challenges
+
+One challenge I encountered was making sure Kafka was running before starting the producer and consumer. I also had to make sure the .env file was created correctly from .env.example.
+
+Another challenge was making sure the correct Kafka topic was used. At first, the project used the topic from .env.example, but I needed to create a real .env file and set:
+
+KAFKA_TOPIC=streaming-02-kafka-femi
+
+I addressed these challenges by reading the terminal logs carefully, running the Kafka admin file first, and confirming that the topic existed before running the producer and consumer.
+
+Suggestions for Others
+
+My advice to others is to run the Kafka admin file first before running the producer and consumer. This helps confirm that Kafka is reachable and that the topic exists.
+
+Also, make sure to create a .env file from .env.example. The .env.example file is only a template, but the Python files need the actual .env file to load the correct project settings.
+
+A good run order is:
+
+uv run python -m streaming.kafka_admin_femi
+uv run python -m streaming.kafka_producer_femi
+uv run python -m streaming.kafka_consumer_femi
+
+Reading the logs carefully is also very helpful because the logs show whether Kafka is reachable, which topic is being used, how many messages were sent, and whether the consumer processed the messages successfully.
+
+
+
+
 
 [![API Reference](https://img.shields.io/badge/API--Utils-datafun--streaming-purple)](https://denisecase.github.io/datafun-streaming/api/)
 [![Workflow Guide](https://img.shields.io/badge/Pro--Guide-pro--analytics--02-green)](https://denisecase.github.io/pro-analytics-02/workflow-b-apply-example-project/)
